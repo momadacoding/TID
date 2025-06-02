@@ -14,7 +14,7 @@
          Simple HTML elements (text formatting, paragraphs, and lists) can be added inside of <![CDATA[ ]]> tag.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
     <description><![CDATA[
-    Detect chinese for i18n
+    Detect chinese for i18n, 检测代码中的中文，主要用于多语言的适配
   ]]></description>
 
     <!-- Product and plugin compatibility requirements.
