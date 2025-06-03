@@ -10,6 +10,8 @@ import com.jetbrains.python.inspections.PyInspection;
 import com.jetbrains.python.psi.*;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.List;
+
 public class ChineseCharacterInspection extends PyInspection {
 
     @NotNull
@@ -83,6 +85,11 @@ public class ChineseCharacterInspection extends PyInspection {
                 return;
             }
 
+            // Skip docstrings - they should be allowed to contain Chinese characters
+            if (isDocString(node)) {
+                return;
+            }
+
             // Check for Chinese characters in string literals
             String text = node.getStringValue();
             if (containsChineseCharacters(text)) {
@@ -110,16 +117,26 @@ public class ChineseCharacterInspection extends PyInspection {
                 Document document = documentManager.getDocument(element.getContainingFile());
                 if (document == null) return false;
 
-                // For live editing, use the current document state directly
-                // Get the element's position in the document
-                int elementStartOffset = element.getTextRange().getStartOffset();
-                int elementEndOffset = element.getTextRange().getEndOffset();
+                // Find the statement that contains this element
+                PsiElement statementElement = element;
+                while (statementElement != null && !(statementElement instanceof PyStatement)) {
+                    statementElement = statementElement.getParent();
+                }
+                
+                // If we couldn't find a statement, fall back to the original element
+                if (statementElement == null) {
+                    statementElement = element;
+                }
+
+                // Get the statement's position in the document
+                int elementStartOffset = statementElement.getTextRange().getStartOffset();
+                int elementEndOffset = statementElement.getTextRange().getEndOffset();
                 
                 // Get line numbers
                 int startLineNumber = document.getLineNumber(elementStartOffset);
                 int endLineNumber = document.getLineNumber(elementEndOffset);
                 
-                // Only check the lines that this element actually spans
+                // Check all lines that this statement spans
                 for (int lineNumber = startLineNumber; lineNumber <= endLineNumber; lineNumber++) {
                     if (lineNumber >= 0 && lineNumber < document.getLineCount()) {
                         int lineStartOffset = document.getLineStartOffset(lineNumber);
@@ -147,6 +164,43 @@ public class ChineseCharacterInspection extends PyInspection {
             // Basic Chinese: U+4E00-U+9FFF
             // Extended ranges can be added as needed
             return text.matches(".*[\\u4E00-\\u9FFF].*");
+        }
+
+        private boolean isDocString(PyStringLiteralExpression node) {
+            // Check if this string literal is a docstring
+            PsiElement parent = node.getParent();
+            
+            // Docstrings are typically the first statement in a function, class, or module
+            if (parent instanceof PyExpressionStatement) {
+                PyExpressionStatement exprStmt = (PyExpressionStatement) parent;
+                PsiElement grandParent = exprStmt.getParent();
+                
+                // Check if it's the first statement in a function body
+                if (grandParent instanceof PyStatementList) {
+                    PyStatementList stmtList = (PyStatementList) grandParent;
+                    PsiElement greatGrandParent = stmtList.getParent();
+                    
+                    if (greatGrandParent instanceof PyFunction || 
+                        greatGrandParent instanceof PyClass) {
+                        // Check if this is the first statement
+                        PyStatement[] statements = stmtList.getStatements();
+                        if (statements.length > 0 && statements[0] == exprStmt) {
+                            return true;
+                        }
+                    }
+                }
+                
+                // Check if it's a module-level docstring
+                if (grandParent instanceof PyFile) {
+                    PyFile file = (PyFile) grandParent;
+                    List<PyStatement> statements = file.getStatements();
+                    if (!statements.isEmpty() && statements.getFirst() == exprStmt) {
+                        return true;
+                    }
+                }
+            }
+            
+            return false;
         }
     }
 }
